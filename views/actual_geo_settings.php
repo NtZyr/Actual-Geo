@@ -5,6 +5,7 @@ function actual_geo_settings() {
 
     $allowed_countries = get_option( 'countries' );
     $default_country = get_option( 'default-country' );
+    $upd_country = get_option( 'upd-country' );
     
     $allow_userPlace = get_option( 'user-place' );
     
@@ -24,6 +25,24 @@ function actual_geo_settings() {
             <?php
                 settings_fields( 'actual-geo-settings' );
                 do_settings_sections( 'actual-geo-settings' ); 
+
+                if( $upd_country == 'yes' ) {
+                    foreach( $allowed_posttypes as $posttype ) {
+                        $args = array(
+                            'post_type' => $posttype,
+                            'posts_per_page' => -1
+                        );
+
+                        $posts = get_posts( $args );
+
+                        foreach( $posts as $p ) {
+                            update_post_meta( $p->ID, 'ag__country', $default_country );
+                        }
+
+                    }
+                }
+
+                update_option( 'upd-country', null );
             ?>
             
             <table class="global__settings">
@@ -41,7 +60,7 @@ function actual_geo_settings() {
                             <?php foreach( $posttypes as $type ) : ?>
                                 <label>
                                     <?php echo $type->label; ?>
-                                    <input <?php echo ( in_array( $type->name, $allowed_posttypes ) ? 'checked' : '' ); ?> type="checkbox" name="posttypes[]" value="<?php echo $type->name; ?>">
+                                    <input <?php echo ( $allowed_posttypes && in_array( $type->name, $allowed_posttypes ) ? 'checked' : '' ); ?> type="checkbox" name="posttypes[]" value="<?php echo $type->name; ?>">
                                 </label>
                             <?php endforeach; ?>
                         </td>
@@ -56,7 +75,7 @@ function actual_geo_settings() {
                         <td>
                             <select name="countries[]" class="chosen-select" multiple>
                                 <?php foreach( $countries as $code => $name ) : ?>
-                                    <option <?php echo ( in_array( $code, $allowed_countries ) ? 'selected' : '' ); ?> value="<?php echo $code; ?>"><?php echo $name; ?></option>
+                                    <option <?php echo ( $allowed_countries && in_array( $code, $allowed_countries ) ? 'selected' : '' ); ?> value="<?php echo $code; ?>"><?php echo $name; ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </td>
@@ -66,11 +85,19 @@ function actual_geo_settings() {
                         <td><?php echo __( 'Default Country: ', 'actual-geo' ); ?></td>
                         <td>
                             <select name="default-country" class="chosen-select">
-                                <?php foreach( $allowed_countries as $country ) : ?>
-                                    <option <?php echo ( $default_country == $country ? 'selected' : '' ); ?> value="<?php echo $country; ?>"><?php echo $country; ?></option>
+                                <?php foreach( $countries as $code => $name ) : ?>
+                                    <?php if( in_array( $code, $allowed_countries ) ) : ?>
+                                        <option <?php echo ( $default_country == $code ? 'selected' : '' ); ?> value="<?php echo $code; ?>"><?php echo $name; ?></option>
+                                    <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
                         </td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if( $allowed_posttypes && $default_country ) : ?>
+                    <tr>
+                        <td><strong><?php echo __( 'Allow default country for all posts in allowed post types?', 'actual-geo' ); ?></strong></td>
+                        <td><input type="checkbox" <?php echo ( $upd_country == 'yes' ? 'checked' : '' ); ?> name="upd-country" value="yes" /></td>
                     </tr>
                     <?php endif; ?>
                     <tr>
@@ -95,7 +122,7 @@ function actual_geo_settings() {
                     </tr>
                     <tr>
                         <td>
-                            <?php var_dump( $default_country ); ?>
+                            <?php var_dump( $upd_country ); ?>
                         </td>
                     </tr>
                 </tfoot>

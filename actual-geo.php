@@ -65,7 +65,7 @@
             wp_localize_script( 'admin-geo-pos', 'url_label', $url_label );
             wp_localize_script( 'admin-geo-pos', 'countries', $countries );
             wp_localize_script( 'admin-geo-pos', 'sites', $sites_arr );
-        } else if ( $hook == 'toplevel_page_actual-geo') {
+        } else if ( $hook == 'toplevel_page_actual-geo' || $hook == 'post.php' || $hook == 'new.php' ) {
             wp_enqueue_script( 'admin-geo-settings', plugin_dir_url( __FILE__ ) . 'assets/js/actual-geo-settings.js', array( 'jquery', 'chosen-js' ) );
         }
     } );
@@ -96,6 +96,7 @@
         register_setting( 'actual-geo-settings', 'posttypes' );
         register_setting( 'actual-geo-settings', 'countries' );
         register_setting( 'actual-geo-settings', 'default-country' );
+        register_setting( 'actual-geo-settings', 'upd-country' );
         register_setting( 'actual-geo-settings', 'user-place' );
     } );
 
@@ -105,3 +106,65 @@
     require_once 'views/actual_geo_settings.php';
     require_once 'views/wpmu_geo_redirects_settings.php';
 
+    /**
+     * Add metabox for allowed post types
+     */
+    add_action( 'add_meta_boxes', function() {
+        $allowed_posttypes = get_option( 'posttypes' );
+        add_meta_box(
+            'post-geodata',
+            __( 'Post Geo Data', 'actual-geo' ),
+            'geodata_callback',
+            $allowed_posttypes
+        );
+    } );
+
+    add_action( 'save_post', function( $post_id ) {
+        // Убедимся что поле установлено.
+        if ( ! isset( $_POST['ag__country'] ) )
+            return;
+
+        // проверяем nonce нашей страницы, потому что save_post может быть вызван с другого места.
+        if ( ! wp_verify_nonce( $_POST['actual-geo_noncename'], plugin_basename(__FILE__) ) )
+            return;
+
+        // если это автосохранение ничего не делаем
+        if ( defined('DOING_AUTOSAVE') && DOING_AUTOSAVE ) 
+            return;
+
+        // проверяем права юзера
+        if( ! current_user_can( 'edit_post', $post_id ) )
+            return;
+
+        // Все ОК. Теперь, нужно найти и сохранить данные
+        // Очищаем значение поля input.
+        $ag__country = sanitize_text_field( $_POST['ag__country'] );
+
+        // Обновляем данные в базе данных.
+        update_post_meta( $post_id, 'ag__country', $ag__country );
+    } );
+
+    function geodata_callback( $post, $meta ) {
+        // var_dump( get_post_custom( $post->ID  )['post_country'][0] );
+        $ag__country = get_post_custom( $post->ID  )['ag__country'][0];
+
+        $countries = json_decode( file_get_contents( 'http://country.io/names.json' ), true );
+        asort( $countries );
+
+        $allowed_countries = get_option( 'countries' );
+
+        wp_nonce_field( plugin_basename(__FILE__), 'actual-geo_noncename' );
+?>
+        <label>
+            <?php echo __( 'Country: ', 'actual-geo' ); ?>
+            <select class="chosen-select" name="ag__country" >
+                <option value="null"><?php echo __( 'None', 'actual-geo' ); ?></option>
+                <?php foreach( $countries as $code => $name ) : ?>
+                    <?php if( in_array( $code, $allowed_countries ) ) { ?>
+                    <option <?php echo ( $code == $ag__country ? 'selected' : '' ); ?> value="<?php echo $code; ?>"><?php echo $name; ?></option>
+                    <?php } ?> 
+                <?php endforeach; ?>
+            </select>
+        </label>
+<?php
+    }
